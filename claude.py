@@ -13,16 +13,10 @@ def env_var(var_name):
     return os.environ.get(var_name)
 
 
-def file_exists(path):
-    return os.path.exists(path)
-
-
-def file_modified(path):
-    return os.path.getmtime(path)
-
-
-def delete_file(path):
-    os.remove(path)
+def read_chat(path):
+    with open(path, "r", encoding="utf-8") as f:
+        chat_string = f.read()
+    return json.loads(chat_string)
 
 
 def write_file(path, text):
@@ -30,26 +24,12 @@ def write_file(path, text):
         f.write(text)
 
 
-def read_chat(path):
-    with open(path, "r", encoding="utf-8") as f:
-        chat_string = f.read()
-    return json.loads(chat_string)
-
-
-def append_chat(path, message):
-    ongoing_chat = read_chat(path) + [message]
-    chat_string = json.dumps(ongoing_chat)
-    write_file(path, chat_string)
-
-
 def markdown_chat(messages, ignore_last_interrupted=True):
     def format_message(msg, idx, all_msgs):
         if msg["role"] == "assistant":
             return f"{msg['content']}\n\n"
         elif msg["role"] == "user":
-            user_message = "\n".join(
-                [f"### {line}" for line in msg["content"].split("\n")]
-            )
+            user_message = "\n".join([f"{line}" for line in msg["content"].split("\n")])
             user_twice = idx + 1 < len(all_msgs) and all_msgs[idx + 1]["role"] == "user"
             last_message = idx == len(all_msgs) - 1
             if user_twice or (last_message and not ignore_last_interrupted):
@@ -93,8 +73,13 @@ if __name__ == "__main__":
     model = env_var("claude_model")
     role = env_var("role_select")
     system_prompt = env_var(role)
-    current_question = env_var("current_question")
+    # current_question = env_var("current_question")
 
+    current_question = sys.argv[1:]
+    # print("############")
+    # print(current_question)
+
+    # load the chat.json file
     conversation_history_file = (
         Path(os.environ.get("alfred_workflow_data")) / "chat.json"
     )
@@ -127,14 +112,17 @@ if __name__ == "__main__":
             }
         )
 
-    # print("fine")
-    # print(type(conversation_history))
-    # print(conversation_history)
-
     data = {
-        "response": markdown_chat(conversation_history),
-        "footer": "Anatomy of fruits and vegetables",
+        "response": conversation_history[-1]["content"]
+        + "\n\n--------------------------------------------------------------",
+        "footer": "You can ask Claude to continue the answer",
         "behaviour": {"response": "append", "scroll": "end", "inputfield": "select"},
     }
+
+    # Convert conversation_history to JSON string before writing
+    write_file(
+        Path(os.environ.get("alfred_workflow_data")) / "chat.json",
+        json.dumps(conversation_history),
+    )
 
     print(json.dumps(data))
